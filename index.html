@@ -206,7 +206,7 @@
 
   .empty { text-align: center; color: var(--text-sub); padding: 40px 20px; font-size: 14px; }
 
-  /* ===== 图表与排行区 ===== */
+  /* ===== 图表与排行区（grid 布局，含联动占比图+趋势图+排行） ===== */
   .panel-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -293,6 +293,7 @@
       </div>
     </div>
 
+    <!-- 预算卡片 -->
     <div class="budget-card">
       <div class="budget-head">
         <span class="budget-title">🎯 本月预算</span>
@@ -317,7 +318,7 @@
 
     <div class="list" id="list"></div>
 
-    <!-- 图表与排行区 -->
+    <!-- 新版：联动占比图 + 趋势图 + 分类排行 -->
     <div class="panel-grid">
       <div class="panel-box">
         <h2 id="typeChartTitle">📊 支出分类占比</h2>
@@ -364,7 +365,7 @@ const CATEGORIES = {
 };
 const STORAGE_KEY = 'my_fancy_records';
 const THEME_KEY = 'my_fancy_theme';
-const BUDGET_KEY = 'my_fancy_budget';
+const BUDGET_KEY = 'my_fancy_budget'; 
 
 const EXPENSE_COLORS = ['#e04a4a', '#f0a020', '#d9534f', '#f0ad4e', '#c9302c', '#ec971f', '#b85450', '#e67e22', '#c0392b', '#f39c12'];
 const INCOME_COLORS  = ['#1a9e5c', '#4a7fe0', '#16a085', '#2980b9', '#27ae60', '#3498db', '#1abc9c', '#2ecc71', '#2c8ecf', '#00b894'];
@@ -372,8 +373,8 @@ const RANK_BADGE_COLORS = ['#e67e22', '#95a5a6', '#c08457', '#b0b8c4', '#b0b8c4'
 
 let records = loadRecords();
 let currentType = 'expense';
-let typeChartObj = null;
-let trendChartObj = null;
+let typeChartObj = null;   // 单个联动占比图
+let trendChartObj = null;  // 趋势图
 let isDarkMode = false;
 
 function loadRecords() {
@@ -381,7 +382,7 @@ function loadRecords() {
 }
 function saveRecords() { localStorage.setItem(STORAGE_KEY, JSON.stringify(records)); }
 
-// 修复：toISOString 使用 UTC，某些时区会差一天，改用本地日期
+// toISOString 使用 UTC，某些时区会差一天，改用本地日期
 function todayStr() {
   const d = new Date();
   const p = n => String(n).padStart(2, '0');
@@ -439,6 +440,7 @@ function init() {
   document.getElementById('btnClearAll').addEventListener('click', clearAllData);
 }
 
+// 切换支出/收入时，同步刷新占比图和分类排行（联动核心）
 function switchType(type) {
   currentType = type;
   typeBtns.forEach(btn => {
@@ -446,7 +448,6 @@ function switchType(type) {
     if (btn.dataset.type === type) btn.classList.add(type === 'expense' ? 'active-expense' : 'active-income');
   });
   $category.innerHTML = CATEGORIES[currentType].map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-  // 联动：切换类型时同步刷新占比图和排行
   renderTypeChart(getFilteredRecords());
   renderRanking(getFilteredRecords());
 }
@@ -483,6 +484,7 @@ function clearAllData() {
   saveRecords(); render();
 }
 
+// 保存预算
 function saveBudget() {
   const val = parseFloat($budgetInput.value);
   if (isNaN(val) || val < 0) return alert('请输入有效的预算金额');
@@ -535,8 +537,8 @@ function renderStats(list) {
   $balance.className = 'value ' + (balance >= 0 ? 'income-text' : 'expense-text');
 }
 
+// 预算进度条渲染
 function renderBudget() {
-  // 预算始终按自然月统计（不受搜索筛选影响）
   const budget = parseFloat(localStorage.getItem(BUDGET_KEY)) || 0;
   const month = $monthFilter.value || currentMonth();
   const spent = records
@@ -588,7 +590,7 @@ function renderList(list) {
   });
 }
 
-/* ======= 占比图：跟随"支出/收入"切换按钮联动 ======= */
+/* ======= 占比图跟随"支出/收入"切换按钮联动 ======= */
 function renderTypeChart(list) {
   const isDark = document.body.classList.contains('dark-mode');
   const textColor = isDark ? '#e4e4e4' : '#555';
@@ -639,7 +641,7 @@ function renderTypeChart(list) {
   });
 }
 
-/* ======= 分类排行：进度条形式，与占比图联动 ======= */
+/* ======= 分类排行（进度条形式，与占比图联动） ======= */
 function renderRanking(list) {
   const stats = getCategoryStats(list, currentType);
   const $sub = document.getElementById('rankSub');
@@ -672,13 +674,12 @@ function renderRanking(list) {
   }).join('');
 }
 
-/* ======= 近 6 个月收支趋势 ======= */
+/* ======= 近 6 个月收支趋势柱状图 ======= */
 function renderTrend() {
   const isDark = document.body.classList.contains('dark-mode');
   const textColor = isDark ? '#e4e4e4' : '#555';
   const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
 
-  // 生成最近 6 个月的月份列表
   const months = [];
   const now = new Date();
   for (let i = 5; i >= 0; i--) {
